@@ -171,7 +171,6 @@ All patient data were fully anonymized prior to extraction, and the requirement 
 
 For questions, suggestions, or collaboration on research projects based on this data:
 
-- 🐙 GitHub: [@zahrabakhshi22](https://github.com/zahrabakhshi22)
 - ✉️ Email (Corresponding Author): [zahrabakhshi22@gmail.com](mailto:zahrabakhshi22@gmail.com)
 - 📧 Email (Supervisor): [v.ghasemi921@gmail.com](mailto:v.ghasemi921@gmail.com)
 - 📧 Email (Advisor): [mohammadhossein.zamanian@kums.ac.ir](mailto:mohammadhossein.zamanian@kums.ac.ir)
