@@ -5,7 +5,7 @@
 ![Records](https://img.shields.io/badge/Records-119,743-blue.svg)
 ![Features](https://img.shields.io/badge/Features-32-green.svg)
 
-A comprehensive dataset of inpatient admission records from emergency and hospital wards, including demographic information, vital signs, laboratory results, and clinical outcomes.
+A comprehensive dataset of in-patient admission records from emergency and hospital wards, including demographic information, vital signs, laboratory results, and clinical outcomes.
 
 ---
 
