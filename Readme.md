@@ -173,9 +173,7 @@ This repository contains two distinct components with different licenses:
 
 ## 🛡️ Ethical Approval
 
-This study was conducted in compliance with the **Declaration of Helsinki** and approved by the **Ethics Committee of the School of Medicine, Kermanshah University of Medical Sciences** under approval code:
-
-**IR.KUMS.MED.REC.1404.284**
+This study was conducted in compliance with the **Declaration of Helsinki** and approved by the **Ethics Committee of the School of Medicine, Kermanshah University of Medical Sciences** under approval code: **IR.KUMS.MED.REC.1404.284**
 
 All patient data were fully anonymized prior to extraction, and the requirement for informed consent was waived by the Ethics Committee due to the retrospective nature of the study.
 
