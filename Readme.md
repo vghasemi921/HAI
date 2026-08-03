@@ -181,9 +181,9 @@ All patient data were fully anonymized prior to extraction, and the requirement 
 
 ## 👥 Contributors
 
-- **Zahra Bakhshi** – Data collection, preprocessing, and analysis
-- **Dr. Vahid Ghasemi** – Supervisor
-- **Dr. Mohammadhossein Zamanian** – advisor
+- **Zahra Bakhshi, MSc** – Data collection, preprocessing, and analysis
+- **Dr. Vahid Ghasemi, PhD** – Supervisor
+- **Dr. Mohammadhossein Zamanian, PhD** – advisor
 
 ---
 
