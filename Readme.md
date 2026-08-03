@@ -17,7 +17,7 @@ This dataset includes **119,743 hospital admission records** with **32 clinical 
 
 - **Total Records**: 119,743
 - **Total Features**: 32
-- **Time Period**: 1402 – 1404 (June 2023 – February 2026)
+- **Time Period**: June 2023 – February 2026
 - **Unique Complaints**: 901 types
 
 ---
