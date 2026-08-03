@@ -147,8 +147,6 @@ This repository contains two distinct components with different licenses:
       > Bakhshi, Z., Ghasemi, V., & Zamanian, M. H. (2026). A Large‑Scale Hospital Dataset for Early Prediction of Hospital‑Acquired Infections Based on Admission and First‑Day Clinical Data (Version 1.0.0) [Dataset]. Zenodo. https://doi.org/[insert Zenodo DOI]
    
       **Attribution:** As required by the CC BY-NC 4.0 license, you must give appropriate credit to the dataset creators and provide a link to the license.
-   
-      **Commercial Use:** This dataset may not be used for commercial purposes without explicit permission from the authors.
 ---
 
 ## 🛡️ Ethical Approval
