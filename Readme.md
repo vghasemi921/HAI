@@ -211,7 +211,3 @@ The script will:
 - Train classifiers (Logistic Regression, Random Forest, AdaBoost, XGBoost)
 - Evaluate performance using cross-validation
 - Generate metrics and visualizations
-
-For full details, please cite our Data Descriptor paper:
-
-> Bakhshi, Z., Ghasemi, V., & Zamanian, M. H. (2026). A Large‑Scale Hospital Dataset for Early Prediction of Hospital‑Acquired Infections Based on Admission and First‑Day Clinical Data. *Journal of Biomedical Physics and Engineering*. [insert JBPE DOI once available]
