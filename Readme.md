@@ -203,7 +203,7 @@ pip install pandas numpy matplotlib seaborn scikit-learn xgboost
 Navigate to the `CODES/` folder and run:
 
 ```bash
-python main.py
+python CODE.py
 ```
 
 The script will:
