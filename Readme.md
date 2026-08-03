@@ -11,7 +11,7 @@ A comprehensive dataset of inpatient admission records from emergency and hospit
 
 ## 📊 Overview
 
-This dataset includes **119,743 hospital admission records** with **32 clinical and demographic features**. The data is derived from real‑world hospital records spanning the years **June 2023 – February 2026**, and included in the file named [Hospital_infection_data.csv]Hospital_infection_data.csv.
+This dataset includes **119,743 hospital admission records** with **32 clinical and demographic features**. The data is derived from real‑world hospital records spanning the years **June 2023 – February 2026**, and included in the file named [Hospital_infection_data.csv] (Hospital_infection_data.csv).
 
 ### General Statistics
 
