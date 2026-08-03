@@ -135,7 +135,7 @@ This repository contains two distinct components with different licenses:
    - This license permits **non‑commercial use**, sharing, and adaptation, provided appropriate credit is given.
    - **Commercial use** (including selling, licensing, or using the data in proprietary commercial products) is **strictly prohibited** without explicit written permission from the authors.
    - Users **must not attempt to re‑identify** any patients, although all data has been de-identified.
-   - ** Additional Terms of Use:**
+   - **Additional Terms of Use:**
 
       By downloading, accessing, or using this dataset, you agree to the following additional terms:
 
