@@ -177,5 +177,41 @@ For questions, suggestions, or collaboration on research projects based on this 
 - 📧 Email (Advisor): [mohammadhossein.zamanian@kums.ac.ir](mailto:mohammadhossein.zamanian@kums.ac.ir)
 
 ---
+## Validation and Code
 
-**Note**: If you use this dataset in your research or project, please cite this repository. (Citation details will be added upon publication of the associated paper.)
+We validated the dataset using classical machine learning methods to establish baseline performance for hospital-acquired infection (HAI) prediction on a subset of the dataset. The code is available in the **`CODE/`** subdirectory, in Python.
+
+### Requirements
+
+The scripts require the following Python packages:
+
+- `pandas`
+- `numpy`
+- `matplotlib`
+- `seaborn`
+- `scikit-learn`
+- `xgboost`
+
+Install them with:
+
+```bash
+pip install pandas numpy matplotlib seaborn scikit-learn xgboost
+```
+
+### Running the Code
+
+Navigate to the `CODES/` folder and run:
+
+```bash
+python main.py
+```
+
+The script will:
+- Preprocess the data
+- Train classifiers (Logistic Regression, Random Forest, AdaBoost, XGBoost)
+- Evaluate performance using cross-validation
+- Generate metrics and visualizations
+
+For full details, please cite our Data Descriptor paper:
+
+> Bakhshi, Z., Ghasemi, V., & Zamanian, M. H. (2026). A Large‑Scale Hospital Dataset for Early Prediction of Hospital‑Acquired Infections Based on Admission and First‑Day Clinical Data. *Journal of Biomedical Physics and Engineering*. [insert JBPE DOI once available]
