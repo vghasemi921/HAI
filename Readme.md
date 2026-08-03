@@ -11,7 +11,7 @@ A comprehensive dataset of in-patient admission records from emergency and hospi
 
 ## 📊 Overview
 
-This dataset includes **119,743 hospital admission records** with **32 clinical and demographic features**. The data is derived from real‑world hospital records spanning the years **June 2023 – February 2026**, and included in a file, named [Hospital_infection_data.csv](Hospital_infection_data.csv).
+This dataset includes **119,743 hospital admission records** with **32 clinical and demographic features**. The data is derived from real‑world hospital records spanning the years **June 2023 – February 2026** at **Imam-Reza Hospital, Kermanshah, Iran**. The dataset is included in a file, named [Hospital_infection_data.csv](Hospital_infection_data.csv).
 
 ### General Statistics
 
@@ -181,9 +181,9 @@ All patient data were fully anonymized prior to extraction, and the requirement 
 
 ## 👥 Contributors
 
-- **Zahra Bakhshi, MSc** – Data collection, preprocessing, and analysis
-- **Dr. Vahid Ghasemi, PhD** – Supervisor
-- **Dr. Mohammadhossein Zamanian, PhD** – advisor
+- **Zahra Bakhshi, MSc** – Department of Computer Engineering, Faculty of Information Technology, Kermanshah University of Technology, Kermanshah, Iran.
+- **Dr. Vahid Ghasemi, PhD** – Department of Computer Engineering, Faculty of Information Technology, Kermanshah University of Technology, Kermanshah, Iran.
+- **Dr. Mohammadhossein Zamanian, PhD** – Clinical Research Development Center, Imam-Reza Hospital, Kermanshah University of Medical Sciences, Kermanshah, Iran.
 
 ---
 
