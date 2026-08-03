@@ -131,7 +131,7 @@ For working with this dataset, the following libraries are recommended:
 This repository contains two distinct components with different licenses:
 
 1. **Source Code (Python scripts)**: Licensed under the **MIT License** – see the [LICENSE](LICENSE) file.
-2. **Dataset (CSV files)**: Licensed under the **Creative Commons Attribution‑NonCommercial 4.0 International License (CC BY‑NC 4.0)** – see the [DATA_LICENSE](DATA_LICENSE) file.
+2. **Dataset (CSV files)**: Licensed under the **Creative Commons Attribution‑NonCommercial 4.0 International License (CC BY‑NC 4.0)** – see the [LICENSE_DATA](LICENSE_DATA) file.
    - This license permits **non‑commercial use**, sharing, and adaptation, provided appropriate credit is given.
    - **Commercial use** (including selling, licensing, or using the data in proprietary commercial products) is **strictly prohibited** without explicit written permission from the authors.
    - Users **must not attempt to re‑identify** any patients.
@@ -150,7 +150,7 @@ All patient data were fully anonymized prior to extraction, and the requirement 
 
 ## 👥 Contributors
 
-- **Zahra Bakhshi** – Data collection, preprocessing, and analysis – [@zahrabakhshi22](https://github.com/zahrabakhshi22)
+- **Zahra Bakhshi** – Data collection, preprocessing, and analysis
 - **Dr. Vahid Ghasemi** – Supervisor
 - **Dr. Mohammadhossein Zamanian** – advisor
 
