@@ -145,7 +145,7 @@ plt.ylabel("True Positive Rate")
 plt.title("ROC Curve Comparison")
 plt.legend()
 plt.grid(alpha=0.3)
-plt.savefig("roc_curve_models.png",dpi=300)
+plt.savefig("roc_curve_models.tiff", dpi=300, format='tiff')
 plt.show()
 
 # Results Table
@@ -166,23 +166,31 @@ for model_name,cm in conf_matrices.items():
     plt.xlabel("Predicted")
     plt.ylabel("True")
 
-    plt.savefig(f"cm_{model_name}.png",dpi=300)
+    plt.savefig(f"cm_{model_name}.tiff", dpi=300, format='tiff')
 
     plt.show()
 
-# Feature importance (RF)
-rf=models["Random Forest"]
-rf.fit(X_imputed,y)
+# 4. FEATURE IMPORTANCE FROM XGBOOST
+xgb_model = models["XGBoost"]
+xgb_model.fit(X_imputed, y)
 
-importances=pd.Series(
-    rf.feature_importances_,
-    index=feature_names
-).sort_values(ascending=False)
+# Extracting importance using feature_importances (weight metric)
+importance_values = xgb_model.feature_importances_
+importances_xgb = pd.Series(importance_values, index=feature_names).sort_values(ascending=False)
 
-plt.figure(figsize=(10,6))
-importances.head(15).plot(kind="barh")
-plt.gca().invert_yaxis()
-plt.title("Top Clinical Predictors of HAI")
+# Print Top 10 Features
+print("\n============================")
+print("TOP 10 FEATURES (XGBoost)")
+print("============================")
+top10_xgb = importances_xgb.head(10)
+for i, (feature, importance) in enumerate(top10_xgb.items(), 1):
+    print(f"{i}. {feature}: {importance:.4f}")
+
+# Drawing a horizontal bar chart
+plt.figure(figsize=(10, 6))
+plt.barh(top10_xgb.index[::-1], top10_xgb.values[::-1])
+plt.xlabel('Importance (weight)')
+plt.title('Top 10 Feature Importance - XGBoost')
 plt.tight_layout()
-plt.savefig("feature_importance_rf.png",dpi=300)
+plt.savefig("feature_importance_xgb.tiff", dpi=300, format='tiff')
 plt.show()
