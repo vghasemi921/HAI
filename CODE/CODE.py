@@ -1,196 +1,390 @@
-import pandas as pd
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+=============================================================================
+ Baseline HAI Prediction - Paper methodology, 3 seeds × 5-fold CV
+=============================================================================
+ - Predictors : admission / first-24h variables only
+ - Excluded   : Ward, Patient complaint, Diagnosis (leaky / free-text / admin)
+ - Sampling   : random undersampling  (1,660 pos + 1,660 neg = 3,320 rows, 1:1)
+ - Models     : LR, RF, AdaBoost, XGBoost
+ - Metrics    : Accuracy, Balanced Acc, Sensitivity, Specificity,
+                Precision, F1, AUROC, AUPRC, MCC
+ - Outputs    : CSV results, ROC plot, XGBoost feature importance (CSV + PNG)
+=============================================================================
+"""
+
+from __future__ import annotations
+
+import time
+import warnings
+from pathlib import Path
+
 import numpy as np
+import pandas as pd
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import seaborn as sns
 
-from sklearn.model_selection import StratifiedKFold
+from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier
 from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import (
-    accuracy_score, recall_score, f1_score, roc_auc_score,
-    roc_curve, confusion_matrix
-)
-
 from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
-
+from sklearn.metrics import (
+    accuracy_score, average_precision_score, balanced_accuracy_score,
+    confusion_matrix, f1_score, matthews_corrcoef,
+    precision_score, roc_auc_score, roc_curve,
+)
+from sklearn.model_selection import StratifiedKFold
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.tree import DecisionTreeClassifier
 from xgboost import XGBClassifier
 
-# 1. Load Dataset
-file_path = "infection_complete_11.csv"
-df = pd.read_csv(file_path)
+warnings.filterwarnings("ignore")
 
-target_col = "label"
 
-if target_col not in df.columns:
-    possible_names = [c for c in df.columns if c.lower() in ['label','lable','target','infection']]
-    if possible_names:
-        target_col = possible_names[0]
-    else:
-        raise ValueError("Target column not found")
+# --------------------------------------------------------------------------
+# Configuration
+# --------------------------------------------------------------------------
+BASE_DIR  = Path(__file__).resolve().parent
+CSV_PATH  = BASE_DIR / "Hospital_infection_data.csv"
+OUT_DIR   = BASE_DIR
 
-cols_to_drop = [c for c in ['id','patient_id','Unnamed: 0'] if c in df.columns]
+SEEDS     = [42, 2024, 7]
+N_SPLITS  = 5
+LABEL_COL = "Label"
 
-X = df.drop(columns=[target_col] + cols_to_drop)
-y = df[target_col].astype(int)
+# Columns that must NOT enter the baseline model
+DROP_COLS = [
+    "#",                  # row index
+    "Ward",               # administrative
+    "Diagnosis",          # 1825-level ICD-10 (leaky & high-cardinality)
+    "Patient complaint",  # free-text (reserved for NLP)
+]
 
-# Encode categorical
-X = pd.get_dummies(X, drop_first=True)
+MODEL_NAMES = ["Logistic Regression", "Random Forest", "AdaBoost", "XGBoost"]
+METRIC_KEYS = ["acc", "bacc", "sens", "spec",
+               "prec", "f1", "auroc", "auprc", "mcc"]
 
-# Impute missing values
-imputer = SimpleImputer(strategy="median")
-X_imputed = imputer.fit_transform(X)
 
-feature_names = X.columns.tolist()
+# --------------------------------------------------------------------------
+# I/O
+# --------------------------------------------------------------------------
+def load_dataset(path: Path) -> pd.DataFrame:
+    df = pd.read_csv(path, encoding="utf-8-sig", low_memory=False)
+    df.columns = (df.columns.astype(str)
+                            .str.replace("\ufeff", "", regex=False)
+                            .str.strip())
+    print(f"[data] raw shape : {df.shape}")
+    return df
 
-# Calculate imbalance ratio
-pos = sum(y==1)
-neg = sum(y==0)
-scale_pos_weight = neg/pos
 
-# 2. Model Definitions
-models = {
+def drop_unused_columns(df: pd.DataFrame) -> pd.DataFrame:
+    present = [c for c in DROP_COLS if c in df.columns]
+    df = df.drop(columns=present)
+    print(f"[data] dropped columns : {present}")
+    print(f"[data] remaining shape : {df.shape}")
+    return df
 
-"Logistic Regression": LogisticRegression(
-    max_iter=2000,
-    class_weight="balanced",
-    random_state=42
-),
 
-"Random Forest": RandomForestClassifier(
-    n_estimators=300,
-    class_weight="balanced",
-    random_state=42
-),
+# --------------------------------------------------------------------------
+# Random undersampling (1:1)
+# --------------------------------------------------------------------------
+def random_undersample(df: pd.DataFrame, seed: int,
+                       label_col: str = LABEL_COL) -> pd.DataFrame:
+    """Randomly sample n_positive negatives to match the positive class (1:1)."""
+    pos = df[df[label_col] == 1]
+    neg = df[df[label_col] == 0]
+    n_pos = len(pos)
+    n_neg_available = len(neg)
 
-"AdaBoost": AdaBoostClassifier(
-    n_estimators=200,
-    learning_rate=0.05,
-    random_state=42
-),
+    if n_neg_available < n_pos:
+        raise ValueError(
+            f"Not enough negatives ({n_neg_available}) to match positives ({n_pos})"
+        )
 
-"XGBoost": XGBClassifier(
-    n_estimators=300,
-    max_depth=5,
-    learning_rate=0.05,
-    subsample=0.8,
-    colsample_bytree=0.8,
-    scale_pos_weight=scale_pos_weight,
-    eval_metric="logloss",
-    random_state=42
-)
-}
+    neg_sel = neg.sample(n=n_pos, random_state=seed, replace=False)
 
-# 3. Cross Validation
-skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    balanced = (
+        pd.concat([pos, neg_sel], ignore_index=True)
+          .sample(frac=1.0, random_state=seed)
+          .reset_index(drop=True)
+    )
+    print(f"[sampling] seed={seed} | rows={len(balanced)} "
+          f"({n_pos} pos + {n_pos} neg) | random undersampling")
+    return balanced
 
-results = []
 
-plt.figure(figsize=(8,6))
+# --------------------------------------------------------------------------
+# Preprocessing
+# --------------------------------------------------------------------------
+def build_preprocessor(X: pd.DataFrame,
+                       impute_numeric: bool = True,
+                       scale_numeric: bool = False) -> ColumnTransformer:
+    num_cols = X.select_dtypes(include=[np.number]).columns.tolist()
+    cat_cols = X.select_dtypes(include=["object", "category"]).columns.tolist()
 
-conf_matrices = {}
+    num_steps = []
+    if impute_numeric:
+        num_steps.append(("imputer", SimpleImputer(strategy="median")))
+    if scale_numeric:
+        num_steps.append(("scaler", StandardScaler()))
+    num_pipe = Pipeline(num_steps) if num_steps else "passthrough"
 
-for model_name, model in models.items():
+    cat_pipe = Pipeline([
+        ("imputer", SimpleImputer(strategy="most_frequent")),
+        ("encoder", OneHotEncoder(handle_unknown="ignore",
+                                  sparse_output=False)),
+    ])
 
-    metrics = {"acc":[],"sen":[],"spe":[],"f1":[],"auc":[]}
+    return ColumnTransformer(
+        transformers=[("num", num_pipe, num_cols),
+                      ("cat", cat_pipe, cat_cols)],
+        remainder="drop",
+    )
 
-    mean_fpr = np.linspace(0,1,100)
-    tprs=[]
 
-    for train_idx, test_idx in skf.split(X_imputed,y):
+def get_preprocessor_for(name: str, X: pd.DataFrame) -> ColumnTransformer:
+    if name == "Logistic Regression":
+        return build_preprocessor(X, impute_numeric=True, scale_numeric=True)
+    if name == "XGBoost":
+        return build_preprocessor(X, impute_numeric=False, scale_numeric=False)
+    return build_preprocessor(X, impute_numeric=True, scale_numeric=False)
 
-        X_train,X_test = X_imputed[train_idx],X_imputed[test_idx]
-        y_train,y_test = y.iloc[train_idx],y.iloc[test_idx]
 
-        if "Logistic" in model_name:
-            scaler=StandardScaler()
-            X_train=scaler.fit_transform(X_train)
-            X_test=scaler.transform(X_test)
+# --------------------------------------------------------------------------
+# Model factory — exactly as in paper
+# --------------------------------------------------------------------------
+def get_model(name: str, seed: int):
+    if name == "Logistic Regression":
+        return LogisticRegression(penalty="l2", C=1.0,
+                                  class_weight="balanced",
+                                  solver="liblinear", max_iter=3000,
+                                  random_state=seed)
+    if name == "Random Forest":
+        return RandomForestClassifier(n_estimators=300, max_depth=10,
+                                      class_weight="balanced",
+                                      n_jobs=-1, random_state=seed)
+    if name == "AdaBoost":
+        return AdaBoostClassifier(
+            estimator=DecisionTreeClassifier(max_depth=1),
+            n_estimators=50, learning_rate=0.05, random_state=seed)
+    if name == "XGBoost":
+        return XGBClassifier(n_estimators=100, max_depth=6, learning_rate=0.1,
+                             eval_metric="logloss",
+                             tree_method="hist", random_state=seed, n_jobs=-1)
+    raise ValueError(name)
 
-        model.fit(X_train,y_train)
 
-        y_pred=model.predict(X_test)
-        y_prob=model.predict_proba(X_test)[:,1]
+# --------------------------------------------------------------------------
+# Cross-validation
+# --------------------------------------------------------------------------
+def evaluate_model(name: str, X: pd.DataFrame, y: pd.Series, seed: int) -> dict:
+    skf = StratifiedKFold(n_splits=N_SPLITS, shuffle=True, random_state=seed)
+    metrics = {k: [] for k in METRIC_KEYS}
+    roc_curves = []
 
-        tn,fp,fn,tp = confusion_matrix(y_test,y_pred).ravel()
+    for tr_idx, te_idx in skf.split(X, y):
+        X_tr, X_te = X.iloc[tr_idx], X.iloc[te_idx]
+        y_tr, y_te = y.iloc[tr_idx], y.iloc[te_idx]
 
-        metrics["acc"].append(accuracy_score(y_test,y_pred))
-        metrics["sen"].append(recall_score(y_test,y_pred))
-        metrics["spe"].append(tn/(tn+fp))
-        metrics["f1"].append(f1_score(y_test,y_pred))
-        metrics["auc"].append(roc_auc_score(y_test,y_prob))
+        prep = get_preprocessor_for(name, X_tr)
+        clf  = get_model(name, seed)
 
-        fpr,tpr,_=roc_curve(y_test,y_prob)
-        tprs.append(np.interp(mean_fpr,fpr,tpr))
+        if name == "XGBoost":
+            n_pos = int((y_tr == 1).sum())
+            n_neg = int((y_tr == 0).sum())
+            clf.set_params(scale_pos_weight=n_neg / max(n_pos, 1))
+            pipe = Pipeline([("prep", prep), ("clf", clf)])
+            pipe.fit(X_tr, y_tr)
+        else:
+            pipe = Pipeline([("prep", prep), ("clf", clf)])
+            pipe.fit(X_tr, y_tr)
 
-        conf_matrices[model_name]=confusion_matrix(y_test,y_pred)
+        y_prob = pipe.predict_proba(X_te)[:, 1]
+        y_pred = (y_prob >= 0.5).astype(int)
 
-    results.append({
-        "Model":model_name,
-        "Accuracy":f"{np.mean(metrics['acc']):.3f} ± {np.std(metrics['acc']):.3f}",
-        "Sensitivity":f"{np.mean(metrics['sen']):.3f} ± {np.std(metrics['sen']):.3f}",
-        "Specificity":f"{np.mean(metrics['spe']):.3f} ± {np.std(metrics['spe']):.3f}",
-        "F1-Score":f"{np.mean(metrics['f1']):.3f} ± {np.std(metrics['f1']):.3f}",
-        "ROC-AUC":f"{np.mean(metrics['auc']):.3f} ± {np.std(metrics['auc']):.3f}"
-    })
+        tn, fp, fn, tp = confusion_matrix(y_te, y_pred, labels=[0, 1]).ravel()
+        sens = tp / (tp + fn) if (tp + fn) else 0.0
+        spec = tn / (tn + fp) if (tn + fp) else 0.0
 
-    mean_tpr=np.mean(tprs,axis=0)
+        metrics["acc"].append(accuracy_score(y_te, y_pred))
+        metrics["bacc"].append(balanced_accuracy_score(y_te, y_pred))
+        metrics["sens"].append(sens)
+        metrics["spec"].append(spec)
+        metrics["prec"].append(precision_score(y_te, y_pred, zero_division=0))
+        metrics["f1"].append(f1_score(y_te, y_pred, zero_division=0))
+        metrics["auroc"].append(roc_auc_score(y_te, y_prob))
+        metrics["auprc"].append(average_precision_score(y_te, y_prob))
+        metrics["mcc"].append(matthews_corrcoef(y_te, y_pred))
 
-    plt.plot(mean_fpr,mean_tpr,label=f"{model_name} (AUC={np.mean(metrics['auc']):.3f})")
+        fpr, tpr, _ = roc_curve(y_te, y_prob)
+        roc_curves.append((fpr, tpr))
 
-# ROC Plot
-plt.plot([0,1],[0,1],'k--')
-plt.xlabel("False Positive Rate")
-plt.ylabel("True Positive Rate")
-plt.title("ROC Curve Comparison")
-plt.legend()
-plt.grid(alpha=0.3)
-plt.savefig("roc_curve_models.tiff", dpi=300, format='tiff')
-plt.show()
+    out = {k: (float(np.mean(v)), float(np.std(v))) for k, v in metrics.items()}
+    out["_roc_curves"] = roc_curves
+    return out
 
-# Results Table
-results_df=pd.DataFrame(results)
 
-print("\n============================")
-print("MODEL PERFORMANCE")
-print("============================")
-print(results_df.to_string(index=False))
+# --------------------------------------------------------------------------
+# Reporting
+# --------------------------------------------------------------------------
+def print_seed_results(name: str, seed: int, res: dict) -> None:
+    print(f"\n--- {name} (seed={seed}) ---")
+    for k in METRIC_KEYS:
+        m, s = res[k]
+        print(f"  {k:>6s}: {m:.4f} ± {s:.4f}")
 
-# Confusion matrices
-for model_name,cm in conf_matrices.items():
 
-    plt.figure(figsize=(5,4))
-    sns.heatmap(cm,annot=True,fmt="d",cmap="Blues",cbar=False)
+def print_final_table(results: dict) -> None:
+    headers = ["Accuracy", "BalancedAcc", "Sensitivity", "Specificity",
+               "Precision", "F1", "AUROC", "AUPRC", "MCC"]
 
-    plt.title(f"Confusion Matrix - {model_name}")
-    plt.xlabel("Predicted")
-    plt.ylabel("True")
+    line = "=" * 185
+    print("\n" + line)
+    print("FINAL RESULTS — random undersampling (3 seeds × 5 folds)")
+    print(line)
+    print(f"{'Model':<22}" + "".join(f"{h:<17}" for h in headers))
+    print("-" * 185)
+    for name in MODEL_NAMES:
+        row = f"{name:<22}"
+        for c in METRIC_KEYS:
+            mean = float(np.mean([r[c][0] for r in results[name]]))
+            std  = float(np.std ([r[c][0] for r in results[name]]))
+            row += f"{mean:.3f}±{std:.3f}   "
+        print(row)
+    print(line + "\n")
 
-    plt.savefig(f"cm_{model_name}.tiff", dpi=300, format='tiff')
 
-    plt.show()
+def save_results_csv(results: dict, out_path: Path) -> None:
+    rows = []
+    for name in MODEL_NAMES:
+        row = {"Model": name}
+        for k in METRIC_KEYS:
+            row[k]          = float(np.mean([x[k][0] for x in results[name]]))
+            row[k + "_std"] = float(np.std ([x[k][0] for x in results[name]]))
+        rows.append(row)
+    pd.DataFrame(rows).to_csv(out_path, index=False)
+    print(f"[save] results → {out_path}")
 
-# 4. FEATURE IMPORTANCE FROM XGBOOST
-xgb_model = models["XGBoost"]
-xgb_model.fit(X_imputed, y)
 
-# Extracting importance using feature_importances (weight metric)
-importance_values = xgb_model.feature_importances_
-importances_xgb = pd.Series(importance_values, index=feature_names).sort_values(ascending=False)
+def plot_roc_curves(results: dict, out_path: Path) -> None:
+    plt.figure(figsize=(7, 6))
+    for name in MODEL_NAMES:
+        all_fpr = np.unique(np.concatenate(
+            [c[0] for r in results[name] for c in r["_roc_curves"]]))
+        mean_tpr = np.zeros_like(all_fpr)
+        n = 0
+        for r in results[name]:
+            for fpr, tpr in r["_roc_curves"]:
+                mean_tpr += np.interp(all_fpr, fpr, tpr)
+                n += 1
+        mean_tpr /= max(n, 1)
+        auc = float(np.mean([x["auroc"][0] for x in results[name]]))
+        plt.plot(all_fpr, mean_tpr, label=f"{name} (AUC={auc:.3f})")
+    plt.plot([0, 1], [0, 1], "k--")
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
+    plt.title("ROC Curve Comparison (random undersampling)")
+    plt.legend(loc="lower right")
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=150)
+    plt.close()
+    print(f"[save] ROC plot → {out_path}")
 
-# Print Top 10 Features
-print("\n============================")
-print("TOP 10 FEATURES (XGBoost)")
-print("============================")
-top10_xgb = importances_xgb.head(10)
-for i, (feature, importance) in enumerate(top10_xgb.items(), 1):
-    print(f"{i}. {feature}: {importance:.4f}")
 
-# Drawing a horizontal bar chart
-plt.figure(figsize=(10, 6))
-plt.barh(top10_xgb.index[::-1], top10_xgb.values[::-1])
-plt.xlabel('Importance (weight)')
-plt.title('Top 10 Feature Importance - XGBoost')
-plt.tight_layout()
-plt.savefig("feature_importance_xgb.tiff", dpi=300, format='tiff')
-plt.show()
+# --------------------------------------------------------------------------
+# Feature importance (XGBoost, weight-based)
+# --------------------------------------------------------------------------
+def xgboost_feature_importance(X: pd.DataFrame, y: pd.Series,
+                               seed: int, top_k: int = 15) -> pd.DataFrame:
+    prep = build_preprocessor(X, impute_numeric=False, scale_numeric=False)
+    Xt = prep.fit_transform(X)
+    try:
+        names = prep.get_feature_names_out()
+    except Exception:
+        names = [f"f{i}" for i in range(Xt.shape[1])]
+
+    model = XGBClassifier(
+        n_estimators=100, max_depth=6, learning_rate=0.1,
+        eval_metric="logloss", tree_method="hist",
+        random_state=seed, n_jobs=-1,
+        importance_type="weight",
+    )
+    model.fit(Xt, y)
+
+    imp = pd.DataFrame({
+        "feature": names,
+        "importance": model.feature_importances_,
+    }).sort_values("importance", ascending=False).reset_index(drop=True)
+
+    print("\nTop feature importances (XGBoost):")
+    for i, row in imp.head(top_k).iterrows():
+        print(f"  {i+1:>2}. {row['feature']:<35s} {row['importance']:.5f}")
+
+    head = imp.head(top_k).iloc[::-1]
+    plt.figure(figsize=(8, max(4, 0.35 * top_k)))
+    plt.barh(head["feature"], head["importance"], color="#1f77b4")
+    plt.xlabel("Importance (weight)")
+    plt.title(f"Top {top_k} Feature Importance — XGBoost")
+    plt.tight_layout()
+    plt.savefig(OUT_DIR / "baseline_xgb_importance.png", dpi=150)
+    plt.close()
+    print(f"[save] feature-importance plot → "
+          f"{OUT_DIR / 'baseline_xgb_importance.png'}")
+
+    return imp
+
+
+# --------------------------------------------------------------------------
+# Main
+# --------------------------------------------------------------------------
+def main() -> None:
+    t0 = time.time()
+
+    df = load_dataset(CSV_PATH)
+    df = drop_unused_columns(df)
+
+    if LABEL_COL not in df.columns:
+        raise SystemExit(f"Label column '{LABEL_COL}' not found.")
+    df[LABEL_COL] = df[LABEL_COL].astype(int)
+
+    results = {name: [] for name in MODEL_NAMES}
+    last_X = last_y = None
+
+    for seed in SEEDS:
+        print(f"\n===== SEED {seed} =====")
+        balanced = random_undersample(df, seed=seed)
+        X = balanced.drop(columns=[LABEL_COL])
+        y = balanced[LABEL_COL]
+        last_X, last_y = X, y
+
+        n_num = X.select_dtypes(include=[np.number]).shape[1]
+        n_cat = X.select_dtypes(include=["object"]).shape[1]
+        print(f"[feat] numeric={n_num} categorical={n_cat} "
+              f"total={n_num + n_cat}")
+        print(f"[feat] categoricals: "
+              f"{X.select_dtypes(include=['object']).columns.tolist()}")
+
+        for name in MODEL_NAMES:
+            res = evaluate_model(name, X, y, seed)
+            print_seed_results(name, seed, res)
+            results[name].append(res)
+
+    print_final_table(results)
+    save_results_csv(results, OUT_DIR / "baseline_results_random_under.csv")
+    plot_roc_curves(results, OUT_DIR / "baseline_roc_random_under.png")
+
+    imp_df = xgboost_feature_importance(last_X, last_y,
+                                        seed=SEEDS[0], top_k=15)
+    imp_df.to_csv(OUT_DIR / "baseline_xgb_feature_importance.csv", index=False)
+    print(f"[save] feature importance CSV → "
+          f"{OUT_DIR / 'baseline_xgb_feature_importance.csv'}")
+
+    print(f"\n✔ All artifacts saved under: {OUT_DIR}")
+    print(f"✔ Total time: {time.time() - t0:.1f} s")
+
+
+if __name__ == "__main__":
+    main()
